@@ -1,0 +1,39 @@
+FROM node:18-alpine
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY client/package*.json ./client/
+COPY server/package*.json ./server/
+
+# Install dependencies
+RUN cd client && npm ci
+RUN cd server && npm ci
+
+# Copy source code
+COPY client ./client
+COPY server ./server
+
+# Build client and set up for serving from server
+RUN cd client && \
+    echo 'window.ENV = { VITE_API_URL: "/api" };' > public/env.js && \
+    npm run build && \
+    cd ../server && \
+    mkdir -p public && \
+    cp -r ../client/dist/* public/
+
+# Expose port 80
+EXPOSE 80
+
+# Set default environment variables
+ENV NODE_ENV=production
+ENV PORT=80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+
+# Set working directory to server and start the server
+WORKDIR /app/server
+CMD ["node", "index.js"]
