@@ -398,6 +398,24 @@ function ChatOnboarding() {
             setCurrentStep(nextStep);
             isProcessingRef.current = false;
           } else {
+            // Conversation complete - validate required fields
+            if (!userData.destination) {
+              // If destination is missing, ask for it again
+              const errorMessage = {
+                id: generateMessageId(),
+                message: "I notice we haven't set your destination yet. Where would you like to go?",
+                isUser: false,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              };
+              addMessage(errorMessage);
+              
+              // Set back to destination step
+              const destinationStepIndex = conversationFlow.findIndex(flow => flow.field === 'destination');
+              setCurrentStep(destinationStepIndex);
+              isProcessingRef.current = false;
+              return;
+            }
+            
             setIsComplete(true);
             isProcessingRef.current = false;
             handleComplete();
@@ -539,10 +557,29 @@ function ChatOnboarding() {
             setCurrentStep(nextStep);
             isProcessingRef.current = false;
           } else {
-            // Conversation complete
+            // Conversation complete - validate required fields
+            const destinationValue = currentFlow.field === 'destination' ? processedValue : updatedUserData.destination;
+            
+            if (!destinationValue) {
+              // If destination is missing, ask for it again
+              const errorMessage = {
+                id: generateMessageId(),
+                message: "I notice we haven't set your destination yet. Where would you like to go?",
+                isUser: false,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              };
+              addMessage(errorMessage);
+              
+              // Set back to destination step
+              const destinationStepIndex = conversationFlow.findIndex(flow => flow.field === 'destination');
+              setCurrentStep(destinationStepIndex);
+              isProcessingRef.current = false;
+              return updatedUserData;
+            }
+            
             setIsComplete(true);
             isProcessingRef.current = false;
-            handleComplete();
+            handleComplete(updatedUserData);
           }
         }, 1500);
       }, 500);
@@ -551,35 +588,35 @@ function ChatOnboarding() {
     });
   };
 
-  const handleComplete = async () => {
+  const handleComplete = async (finalUserData = userData) => {
     setLoading(true);
     try {
       // Calculate duration if we have dates
       let duration = 1;
-      if (userData.startDate && userData.endDate) {
-        const start = new Date(userData.startDate);
-        const end = new Date(userData.endDate);
+      if (finalUserData.startDate && finalUserData.endDate) {
+        const start = new Date(finalUserData.startDate);
+        const end = new Date(finalUserData.endDate);
         const diffTime = Math.abs(end - start);
         duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       }
 
       // Validate and prepare user data for API
       const userProfile = {
-        name: userData.name || 'User',
-        ageRange: userData.ageRange || '26-35',
-        travelStyle: userData.travelStyle || 'mixed',
-        budgetRange: userData.budgetRange || 'mid-range',
-        dietaryRestrictions: Array.isArray(userData.dietaryRestrictions) ? userData.dietaryRestrictions : [],
-        groupType: userData.groupType || 'solo',
-        interests: Array.isArray(userData.interests) ? userData.interests : ['culture'],
-        energyLevel: userData.energyLevel || 'moderate',
+        name: finalUserData.name || 'User',
+        ageRange: finalUserData.ageRange || '26-35',
+        travelStyle: finalUserData.travelStyle || 'mixed',
+        budgetRange: finalUserData.budgetRange || 'mid-range',
+        dietaryRestrictions: Array.isArray(finalUserData.dietaryRestrictions) ? finalUserData.dietaryRestrictions : [],
+        groupType: finalUserData.groupType || 'solo',
+        interests: Array.isArray(finalUserData.interests) ? finalUserData.interests : ['culture'],
+        energyLevel: finalUserData.energyLevel || 'moderate',
         accommodationPreferences: [],
         locationPreferences: []
       };
 
       // Ensure we have valid dates
-      let startDate = userData.startDate;
-      let endDate = userData.endDate;
+      let startDate = finalUserData.startDate;
+      let endDate = finalUserData.endDate;
       
       if (!startDate || !endDate) {
         const today = new Date();
@@ -587,12 +624,17 @@ function ChatOnboarding() {
         endDate = endDate || new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       }
 
+      // Validate required fields before creating trip
+      if (!finalUserData.destination) {
+        throw new Error('Destination is required but not provided');
+      }
+
       const tripData = {
-        destination: userData.destination || 'Paris, France',
+        destination: finalUserData.destination,
         startDate: startDate,
         endDate: endDate,
         duration: duration,
-        partySize: userData.partySize || 1
+        partySize: finalUserData.partySize || 1
       };
 
       // Create user and trip
@@ -613,7 +655,7 @@ function ChatOnboarding() {
           // Show completion message
           const completionMessage = {
             id: generateMessageId(),
-            message: `Perfect! 🎉 I've got everything I need to create your personalized trip to ${userData.destination || 'your destination'}. Let me generate some amazing recommendations for you!`,
+            message: `Perfect! 🎉 I've got everything I need to create your personalized trip to ${finalUserData.destination || 'your destination'}. Let me generate some amazing recommendations for you!`,
             isUser: false,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
